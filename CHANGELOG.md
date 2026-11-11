@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0-fork.2] - 2026-11-11
+
+1. The explicit pin list (**Global pins**) now renders LAST in the section: live state groups (running / unread / open now) come first, then pinned workspaces, then the pin list. A long pin list no longer pushes the live groups out of sight.
+2. A pinned row now carries the same hover affordances as the shipped row: a `...` button that opens the SHIPPED session menu (via `contextMenus.open({ kind: "session" })`), so rename / fork / archive / pin are identical to the native row and include contributions from other plugins. Right-click, the Context Menu key and Shift+F10 open it too.
+3. Row actions moved into an absolutely positioned cluster, and the row clips its own overflow: revealing them on hover no longer reflows the title, and they can never paint over the neighbouring rows. The cluster is not rendered at all when it would hold nothing.
+4. `contextMenus` added to the plugin inject list; without it the `...` button degrades away and the rest of the section still works.
+
 ## [0.3.0-fork.1] - 2026-11-11
 
 Forked from `dsh-pinned-sessions` 0.2.1 as `dsh-session-focus`.

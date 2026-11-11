@@ -65,6 +65,8 @@ The section renders only while sessions are grouped by workspace (the "By worksp
 2. A workspace's "..." menu carries the same action. DSH declares no slot for that menu, so the row is portaled into the shipped popup, located from the open row's `data-row-key="workspace:<key>"`.
 3. A pinned session row and a pinned workspace header both carry an unpin control that appears on hover — the workspace one matters because its ordinary row is hidden while it is pinned.
 
+Hovering any row in the section reveals the same **`...` more** button the shipped row has: clicking it, right-clicking the row, or pressing <kbd>Shift</kbd>+<kbd>F10</kbd> / <kbd>Menu</kbd> opens the **shipped session menu**, so rename, fork, archive and pin behave exactly as on a native row, including entries other plugins contribute to that menu.
+
 The section is inserted at the top of the list's own scroll container, so a long pinned section scrolls together with the workspace groups rather than clipping its own overflow.
 
 ## Settings

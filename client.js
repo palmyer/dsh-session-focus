@@ -95,7 +95,7 @@
           ".dshps-groupToggle:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:0}",
           ".dshps-groupToggleOpen{transform:rotate(90deg)}",
           ".dshps-count{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}",
-          ".dshps-row{box-sizing:border-box;width:100%;height:32px;padding:0 8px;border:0;background:transparent;border-radius:var(--dsw-radius-md,8px);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:14px;line-height:20px;text-align:left;cursor:pointer;user-select:none;display:flex;align-items:center;gap:0}",
+          ".dshps-row{position:relative;box-sizing:border-box;width:100%;height:32px;padding:0 8px;border:0;background:transparent;border-radius:var(--dsw-radius-md,8px);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:14px;line-height:20px;text-align:left;cursor:pointer;user-select:none;display:flex;align-items:center;gap:0;overflow:hidden}",
           ".dshps-row:hover{background:var(--dsw-alias-interactive-bg-hover)}",
           ".dshps-row:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}",
           ".dshps-dotCell{width:16px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}",
@@ -107,8 +107,18 @@
           ".dshps-title{flex:1;min-width:0;margin:0 6px 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
           ".dshps-titleButton{background:transparent;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}",
           ".dshps-where{flex:none;max-width:42%;margin-left:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-          ".dshps-action{width:20px;height:20px;flex:none;margin-left:4px;padding:0;border:0;border-radius:var(--dsw-radius-sm,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:12px;line-height:20px;opacity:0}",
-          ".dshps-row:hover .dshps-action,.dshps-wsHeader:hover .dshps-action,.dshps-action:focus-visible{opacity:1}",
+          // The trailing cluster overlays the end of the row instead of taking part
+          // in its flex layout, so revealing it never shifts the title and never
+          // spills onto the rows above or below. Its backdrop fades in from nothing
+          // so the ellipsis of a long title stays legible on hover.
+          ".dshps-actions{position:absolute;top:50%;right:6px;transform:translateY(-50%);display:flex;align-items:center;gap:2px;padding-left:12px;background:linear-gradient(to right,transparent,var(--dsw-alias-interactive-bg-hover) 12px)}",
+          ".dshps-action{width:20px;height:20px;flex:none;margin:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:12px;line-height:20px;opacity:0}",
+          ".dshps-row:hover .dshps-action,.dshps-row:focus-within .dshps-action,.dshps-wsHeader:hover .dshps-action,.dshps-action:focus-visible{opacity:1}",
+          // The native row keeps its trailing actions visible on touch devices,
+          // where there is no hover to reveal them.
+          "@media (hover:none){.dshps-action{opacity:1}}",
+          ".dshps-more{font-size:14px;line-height:18px;letter-spacing:1px}",
+          ".dshps-row:hover .dshps-more{color:var(--dsw-alias-label-secondary)}",
           ".dshps-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
           ".dshps-wsGroup{padding-top:2px}",
           ".dshps-wsHeader{box-sizing:border-box;width:100%;height:32px;padding:0 8px;border:0;background:transparent;border-radius:var(--dsw-radius-md,8px);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:14px;line-height:20px;text-align:left;cursor:pointer;user-select:none;display:flex;align-items:center;gap:0}",
@@ -137,6 +147,7 @@
           "group.workspacePins": "置顶工作区",
           "session.blank": "新会话",
           "row.open": "打开会话 {name}",
+          "row.more": "更多：重命名、分叉、归档、置顶…",
           "workspace.expand": "展开 {name}",
           "workspace.collapse": "折叠 {name}",
           "group.expand": "展开 {name}",
@@ -156,6 +167,7 @@
           "group.workspacePins": "Pinned workspaces",
           "session.blank": "New session",
           "row.open": "Open session {name}",
+          "row.more": "More: rename, fork, archive, pin…",
           "workspace.expand": "Expand {name}",
           "workspace.collapse": "Collapse {name}",
           "group.expand": "Expand {name}",
@@ -635,13 +647,42 @@
         }
 
         /** One row: status dot, Session title, owning workspace, unpin affordance. */
+        /**
+         * One row. Hover reveals the same affordances the shipped row offers: a
+         * "..." button that opens the SHIPPED session menu at the pointer, plus
+         * right-click and the Context Menu / Shift+F10 keys. Opening the shipped
+         * menu rather than re-implementing it keeps rename, fork, archive and pin
+         * identical to the native row, including contributions from other plugins.
+         */
         function PinnedRow(props) {
           var row = props.row;
           var title = row.blank ? props.t("session.blank") : (row.title || props.t("session.blank"));
           var stamp = row.updatedAt > 0 ? new Date(row.updatedAt).toLocaleString() : "";
           var hint = row.where === "" ? title : title + " · " + row.where;
           if (stamp !== "") hint += " · " + stamp;
-          return h("div", { className: "dshps-row" },
+          var canMenu = typeof props.openMenu === "function";
+          var canUnpin = typeof props.onUnpin === "function" && row.hostPinned !== true;
+          // The shipped rows open their menu at the pointer, or under the row for a
+          // keyboard open (where the pointer coordinates are both zero).
+          var showMenu = (point, event) => {
+            if (!canMenu) return;
+            event.preventDefault();
+            event.stopPropagation();
+            var at = point;
+            if (at === undefined) {
+              var rect = event.currentTarget.getBoundingClientRect();
+              at = { x: rect.left, y: rect.bottom };
+            }
+            props.openMenu(row.id, title, at);
+          };
+          return h("div", {
+            className: "dshps-row",
+            "data-dshps-row": row.id,
+            onContextMenu: (event) => {
+              var keyboard = event.clientX === 0 && event.clientY === 0;
+              showMenu(keyboard ? undefined : { x: event.clientX, y: event.clientY }, event);
+            },
+          },
             h("span", { className: "dshps-dotCell" }, h("span", { className: "dshps-dot " + row.dot })),
             h("button", {
               type: "button",
@@ -649,17 +690,42 @@
               title: hint,
               "aria-label": props.t("row.open", { name: title }),
               onClick: () => { props.openSession(row.id); },
+              onKeyDown: (event) => {
+                // Mirror the shipped row: Shift+F10 and the Context Menu key open
+                // the menu with the keyboard.
+                if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
+                var rect = event.currentTarget.getBoundingClientRect();
+                showMenu({ x: rect.left, y: rect.bottom }, event);
+              },
             }, title),
             row.where === "" ? null : h("span", { className: "dshps-where" }, row.where),
-            // A Host-pinned row keeps its unpin entry in the shipped "..." menu;
-            // only a pin this plugin owns gets the inline × here.
-            props.onUnpin === undefined || row.hostPinned === true ? null : h("button", {
-              type: "button",
-              className: "dshps-action",
-              title: props.t("action.unpin"),
-              "aria-label": props.t("action.unpin"),
-              onClick: (event) => { event.stopPropagation(); props.onUnpin(); },
-            }, "×"),
+            // The trailing cluster is taken OUT of flow: revealing it on hover must
+            // not reflow the title or the workspace label, and it must never paint
+            // outside its own row (in particular not over the neighbouring rows).
+            // A Host-pinned row keeps its unpin entry in the shipped "..." menu, so
+            // only a pin this plugin owns gets the inline × here, ahead of "...".
+            // An empty cluster would still paint its backdrop over the title, so it
+            // is not rendered at all when it would hold nothing.
+            canUnpin || canMenu ? h("span", { className: "dshps-actions" },
+              canUnpin ? h("button", {
+                type: "button",
+                className: "dshps-action",
+                title: props.t("action.unpin"),
+                "aria-label": props.t("action.unpin"),
+                onClick: (event) => { event.stopPropagation(); props.onUnpin(); },
+              }, "×") : null,
+              canMenu ? h("button", {
+                type: "button",
+                className: "dshps-action dshps-more",
+                title: props.t("row.more"),
+                "aria-label": props.t("row.more", { name: title }),
+                "aria-haspopup": "menu",
+                onClick: (event) => {
+                  var rect = event.currentTarget.getBoundingClientRect();
+                  showMenu({ x: rect.left, y: rect.bottom }, event);
+                },
+              }, "…") : null,
+            ) : null,
           );
         }
 
@@ -676,6 +742,7 @@
               row: row,
               t: props.t,
               openSession: props.openSession,
+              openMenu: props.openMenu,
             })),
           );
         }
@@ -704,6 +771,7 @@
               row: row,
               t: props.t,
               openSession: props.openSession,
+              openMenu: props.openMenu,
               onUnpin: () => { props.unpinSession(row.id); },
             })),
           );
@@ -743,6 +811,7 @@
               row: row,
               t: props.t,
               openSession: props.openSession,
+              openMenu: props.openMenu,
             }))) : null,
           );
         }
@@ -751,21 +820,19 @@
         function PinnedSection(props) {
           var parts = props.parts;
           if (parts.sessionPins.length === 0 && parts.statusGroups.length === 0 && parts.workspacePins.length === 0) return null;
+          // Order matters. The groups that change by themselves (running, unread,
+          // open now) sit right under the heading, because those are what the user
+          // scans for. Pinned workspaces follow, and the explicit pin list is LAST:
+          // it is often long, and when it sat first it pushed the live groups out
+          // of sight and its own hover affordances fought the rows above it.
           return h("div", null,
             h("div", { className: "dshps-heading" }, props.t("heading")),
-            h(SessionPinGroup, {
-              rows: parts.sessionPins,
-              collapsed: props.sessionPinsCollapsed === true,
-              onToggleCollapsed: props.toggleSessionPinsCollapsed,
-              t: props.t,
-              openSession: props.openSession,
-              unpinSession: props.unpinSession,
-            }),
             parts.statusGroups.map(group => h(StatusGroup, {
               key: group.key,
               group: group,
               t: props.t,
               openSession: props.openSession,
+              openMenu: props.openMenu,
             })),
             parts.workspacePins.length === 0 ? null : h("div", { className: "dshps-group" },
               h("div", { className: "dshps-groupTitle" }, h("span", null, props.t("group.workspacePins"))),
@@ -775,10 +842,20 @@
                 collapsed: props.collapsedWorkspaces.indexOf(workspace.key) >= 0,
                 t: props.t,
                 openSession: props.openSession,
+                openMenu: props.openMenu,
                 toggleOpen: props.toggleWorkspaceOpen,
                 unpinWorkspace: props.unpinWorkspace,
               })),
             ),
+            h(SessionPinGroup, {
+              rows: parts.sessionPins,
+              collapsed: props.sessionPinsCollapsed === true,
+              onToggleCollapsed: props.toggleSessionPinsCollapsed,
+              t: props.t,
+              openSession: props.openSession,
+              openMenu: props.openMenu,
+              unpinSession: props.unpinSession,
+            }),
           );
         }
 
@@ -900,6 +977,7 @@
               toggleSessionPinsCollapsed: () => { props.actions.toggleSessionPinsCollapsed(); },
               t: props.t,
               openSession: props.openSession,
+              openMenu: props.openMenu,
               unpinSession: (sessionId) => { props.actions.toggleSession(sessionId); },
               unpinWorkspace: (key) => { props.actions.toggleWorkspace(key); },
               toggleWorkspaceOpen: (key) => { props.actions.toggleWorkspaceOpen(key); },
@@ -935,7 +1013,9 @@
           );
         }
 
-        var inject = ["slots", "locale"];
+        // `contextMenus` is optional: the section still works without it, only the
+        // row row-menu affordance degrades.
+        var inject = ["slots", "locale", "contextMenus"];
 
         function apply(ctx) {
           var prefs = clientStore.defineStore({
@@ -985,6 +1065,21 @@
                   return;
                 }
                 service.openSession(sessionId);
+              },
+              // Open the SHIPPED session menu at a point, so a row here offers the
+              // same rename / fork / archive / pin choices the native row does,
+              // contributed by every plugin that registered into that target.
+              openMenu: (sessionId, displayTitle, point) => {
+                var menus = ctx.get("contextMenus");
+                if (menus === undefined || menus === null || typeof menus.open !== "function") {
+                  console.warn("[dsh-session-focus] contextMenus.open is unavailable");
+                  return false;
+                }
+                menus.open(
+                  { kind: "session", value: { sessionId: sessionId, displayTitle: displayTitle } },
+                  point,
+                );
+                return true;
               },
             }),
           }, PinnedOverlay));

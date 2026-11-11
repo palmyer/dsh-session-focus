@@ -62,7 +62,7 @@ const moduleExports = captured.factory((name) => {
 
 assert.strictEqual(typeof moduleExports.apply, 'function')
 // Arrays built inside the vm realm have a different Array prototype; compare by value.
-assert.strictEqual(moduleExports.inject.join(','), 'slots,locale')
+assert.strictEqual(moduleExports.inject.join(','), 'slots,locale,contextMenus')
 
 // ---- apply() wiring -------------------------------------------------------
 const registrations = []
@@ -94,7 +94,7 @@ assert.strictEqual(overlay.options.locale, 'session-focus')
 assert.strictEqual(sessionMenu.options.order, 450, 'the menu row sits after the shipped rows (100/200/300/400)')
 assert.strictEqual(sessionMenu.options.locale, 'session-focus')
 assert.strictEqual(typeof overlay.options.inject, 'function', 'overlay needs the openSession face')
-assert.strictEqual(Object.keys(overlay.options.inject()).join(','), 'openSession')
+assert.strictEqual(Object.keys(overlay.options.inject()).join(','), 'openSession,openMenu')
 assert.ok(localeDicts && localeDicts.zh && localeDicts.en, 'dictionaries not registered')
 const handles = new Set([overlay.options.store, sessionMenu.options.store, settings.options.store])
 assert.strictEqual(handles.size, 1, 'all three rows must share one store handle')
@@ -240,8 +240,12 @@ const tree = PinnedSection({
 })
 assert.strictEqual(tree.type, 'div')
 assert.strictEqual(tree.children[0].children[0], 'heading')
-assert.strictEqual(tree.children[1].type.name, 'SessionPinGroup')
-const pinGroup = tree.children[1].type(tree.children[1].props)
+// Order: live state groups first, then pinned workspaces, then the explicit
+// pin list last, so a long pin list never pushes the live groups away.
+assert.strictEqual(tree.children[1].length, 2, 'unread and current groups sit directly under the heading')
+assert.strictEqual(tree.children[1][0].type.name, 'StatusGroup')
+assert.strictEqual(tree.children[3].type.name, 'SessionPinGroup')
+const pinGroup = tree.children[3].type(tree.children[3].props)
 const pinCaption = pinGroup.children[0]
 assert.strictEqual(pinCaption.children[0].props.className, 'dshps-groupToggle dshps-groupToggleOpen', 'the group caption carries the collapse toggle on its left')
 assert.strictEqual(pinCaption.children[0].props['aria-expanded'], 'true')
@@ -253,16 +257,19 @@ const pinRow = pinRows[1]
 assert.strictEqual(pinRow.props.className, 'dshps-row')
 assert.strictEqual(pinRow.children[0].children[0].props.className, 'dshps-dot dshps-dot-running')
 assert.strictEqual(pinRow.children[1].children[0], 'S-run')
-assert.strictEqual(pinRow.children[3].props.className, 'dshps-action', 'pinned rows carry an unpin control')
-const collapsedPins = tree.children[1].type(Object.assign({}, tree.children[1].props, { collapsed: true }))
+const actionCluster = pinRow.children[3]
+assert.strictEqual(actionCluster.props.className, 'dshps-actions', 'trailing actions live in their own overlay cluster')
+assert.strictEqual(actionCluster.children[0].props.className, 'dshps-action', 'a locally pinned row carries an unpin control')
+assert.strictEqual(pinRow.props.onContextMenu !== undefined, true, 'right-click opens the shipped session menu')
+const collapsedPins = tree.children[3].type(Object.assign({}, tree.children[3].props, { collapsed: true }))
 assert.strictEqual(collapsedPins.children[1], null, 'a collapsed global-pin group renders no rows')
 assert.strictEqual(collapsedPins.children[0].children[0].props.className, 'dshps-groupToggle')
 assert.strictEqual(collapsedPins.children[0].children[0].props['aria-expanded'], 'false')
 assert.strictEqual(collapsedPins.children[0].children[2].children[0], '2', 'the count stays readable while collapsed')
-const statusList = tree.children[2]
+const statusList = tree.children[1]
 assert.strictEqual(statusList.length, 2, 'unread and current groups (the pinned running Session left them)')
 assert.strictEqual(statusList[0].type.name, 'StatusGroup')
-const workspaceSection = tree.children[3]
+const workspaceSection = tree.children[2]
 assert.strictEqual(workspaceSection.props.className, 'dshps-group')
 assert.strictEqual(workspaceSection.children[0].children[0].children[0], 'group.workspacePins')
 const wsGroupElement = workspaceSection.children[1][0]
