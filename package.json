@@ -1,17 +1,17 @@
 {
-  "name": "dsh-pinned-sessions",
-  "version": "0.2.1",
-  "description": "Keeps running, finished-but-unopened and currently open sessions at the top of the DSH Web sidebar workspace list.",
+  "name": "dsh-session-focus",
+  "version": "0.3.0-fork.1",
+  "description": "Puts pinned, running, finished-but-unopened and currently open sessions in one section at the top of the DSH Web sidebar. Fork of dsh-pinned-sessions that also merges the native registry pin set.",
   "license": "MIT",
   "type": "module",
   "main": "./index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TianYa-DAO/dsh-pinned-sessions.git"
+    "url": "git+https://github.com/palmyer/dsh-session-focus.git"
   },
-  "homepage": "https://github.com/TianYa-DAO/dsh-pinned-sessions#readme",
+  "homepage": "https://github.com/palmyer/dsh-session-focus#readme",
   "bugs": {
-    "url": "https://github.com/TianYa-DAO/dsh-pinned-sessions/issues"
+    "url": "https://github.com/palmyer/dsh-session-focus/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -47,8 +47,8 @@
     "test": "node tests/selfcheck.cjs"
   },
   "dsh": {
-    "id": "dsh-pinned-sessions",
-    "name": "Pinned sessions",
+    "id": "dsh-session-focus",
+    "name": "Session focus",
     "bundle": {
       "patch": "./cordis.patch.yml"
     },

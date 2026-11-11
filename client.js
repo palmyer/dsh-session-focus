@@ -1,5 +1,5 @@
 /**
- * dsh-pinned-sessions — client half.
+ * dsh-session-focus — client half.
  *
  * Adds a pinned section at the top of the sidebar's workspace browsing region
  * (below the region header, above every workspace group) with three parts, in
@@ -39,7 +39,7 @@
 (() => {
   try {
     window.__ModuleLoader__.load({
-      id: "dsh-pinned-sessions",
+      id: "dsh-session-focus",
       factory: (require) => {
         var module = { exports: {} };
         var exports = module.exports;
@@ -52,12 +52,12 @@
           try { return require("@deepseek-ai/dsh-client-ui-primitives"); } catch (error) { return {}; }
         })();
 
-        var NS = "pinned-sessions";
+        var NS = "session-focus";
         var h = react.createElement;
-        var STYLE_ID = "dsh-pinned-sessions/pinned.css";
-        var HIDE_STYLE_ID = "dsh-pinned-sessions/hide.css";
-        var HOST_ATTR = "data-dsh-pinned-sessions";
-        var MENU_HOST_ATTR = "data-dsh-pinned-sessions-menu";
+        var STYLE_ID = "dsh-session-focus/pinned.css";
+        var HIDE_STYLE_ID = "dsh-session-focus/hide.css";
+        var HOST_ATTR = "data-dsh-session-focus";
+        var MENU_HOST_ATTR = "data-dsh-session-focus-menu";
         var RECONCILE_MS = 1500;
         var PRUNE_GRACE_MS = 60000;
         var WORKSPACE_ROW_PREFIX = "workspace:";
@@ -171,7 +171,7 @@
           if (typeof document === "undefined") return;
           if (document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_ID) + "]") !== null) return;
           var tag = document.createElement("style");
-          tag.dataset.plugin = "dsh-pinned-sessions";
+          tag.dataset.plugin = "dsh-session-focus";
           tag.dataset.pluginCss = STYLE_ID;
           tag.textContent = CSS;
           document.head.appendChild(tag);
@@ -266,10 +266,32 @@
           };
 
           var sessionPins = [];
+          var pinSeen = {};
+          // The Host keeps its own registry-global pin set
+          // (`workspaces.pinnedSessionIds`), and a Session pinned from the
+          // shipped "..." menu belongs in this section exactly as much as one
+          // pinned here. The two sets are therefore merged rather than kept
+          // apart. Host pins lead because the registry already orders them
+          // most-recently-pinned first.
+          var hostPins = workspaceState && Array.isArray(workspaceState.pinnedSessionIds)
+            ? workspaceState.pinnedSessionIds
+            : [];
+          for (var h0 = 0; h0 < hostPins.length; h0++) {
+            var hostId = hostPins[h0];
+            if (typeof hostId !== "string" || pinSeen[hostId] === true) continue;
+            pinSeen[hostId] = true;
+            var hostRow = rowOf(hostId);
+            // The Host owns this pin: its own "..." menu carries the unpin row,
+            // so this section must not offer a second control that would only
+            // clear the local list and leave the registry pin standing.
+            if (hostRow !== null) { hostRow.hostPinned = true; sessionPins.push(hostRow); }
+          }
           var pinnedSessions = listOf(prefs && prefs.pinnedSessions);
           for (var p = 0; p < pinnedSessions.length; p++) {
+            if (pinSeen[pinnedSessions[p]] === true) continue;
+            pinSeen[pinnedSessions[p]] = true;
             var pinnedRow = rowOf(pinnedSessions[p]);
-            if (pinnedRow !== null) sessionPins.push(pinnedRow);
+            if (pinnedRow !== null) { pinnedRow.localPinned = true; sessionPins.push(pinnedRow); }
           }
           // A pinned Session is listed once while its part is expanded; collapsing
           // that part hands it back to the state groups, so folding the pins away
@@ -358,7 +380,7 @@
             var warnOnce = (reason) => {
               if (warned[reason] === true) return;
               warned[reason] = true;
-              console.warn("[dsh-pinned-sessions] pinned section hidden: " + reason);
+              console.warn("[dsh-session-focus] pinned section hidden: " + reason);
             };
             var detach = () => {
               if (node.parentNode !== null) node.parentNode.removeChild(node);
@@ -524,7 +546,7 @@
               if (nextKey === null || viewport === null) {
                 if (nextKey !== null && !warned) {
                   warned = true;
-                  console.warn("[dsh-pinned-sessions] workspace menu row not injected: the menu popup was not found");
+                  console.warn("[dsh-session-focus] workspace menu row not injected: the menu popup was not found");
                 }
                 detach();
                 return;
@@ -574,7 +596,7 @@
             if (tag === null) {
               tag = document.createElement("style");
               tag.id = HIDE_STYLE_ID;
-              tag.dataset.plugin = "dsh-pinned-sessions";
+              tag.dataset.plugin = "dsh-session-focus";
               document.head.appendChild(tag);
             }
             var rules = [];
@@ -601,7 +623,7 @@
             if (probe === null || window.getComputedStyle(probe).display === "none") return undefined;
             broken.current = true;
             tag.textContent = "";
-            console.warn("[dsh-pinned-sessions] hiding did not apply; the pinned workspace also stays in the list");
+            console.warn("[dsh-session-focus] hiding did not apply; the pinned workspace also stays in the list");
             return undefined;
           }, [active, pinnedWorkspaces, workspaceItems]);
         }
@@ -629,7 +651,9 @@
               onClick: () => { props.openSession(row.id); },
             }, title),
             row.where === "" ? null : h("span", { className: "dshps-where" }, row.where),
-            props.onUnpin === undefined ? null : h("button", {
+            // A Host-pinned row keeps its unpin entry in the shipped "..." menu;
+            // only a pin this plugin owns gets the inline × here.
+            props.onUnpin === undefined || row.hostPinned === true ? null : h("button", {
               type: "button",
               className: "dshps-action",
               title: props.t("action.unpin"),
@@ -793,9 +817,14 @@
         function SessionPinMenuItem(props) {
           var pinnedList = listOf(props.useStore(state => state.pinnedSessions));
           var archived = props.useWorkspaces(state => state.archivedSessionIds);
+          var hostPins = props.useWorkspaces(state => state.pinnedSessionIds);
           var pair = props.useMenuOpenState();
           var setMenuOpen = pair[1];
           if (Array.isArray(archived) && archived.indexOf(props.sessionId) >= 0) return null;
+          // Already pinned through the Host registry: the shipped menu carries the
+          // unpin row for it, so a second, local-only toggle here would duplicate
+          // that entry and disagree with it.
+          if (Array.isArray(hostPins) && hostPins.indexOf(props.sessionId) >= 0) return null;
           var pinned = pinnedList.indexOf(props.sessionId) >= 0;
           var icon = pinned ? IconPinFill : IconPinOutline;
           return h(MenuRow, {
@@ -911,7 +940,7 @@
         function apply(ctx) {
           var prefs = clientStore.defineStore({
             init: () => ({ enabled: true, pinnedSessions: [], pinnedWorkspaces: [], collapsedWorkspaces: [], sessionPinsCollapsed: false }),
-            persist: "dsh.pinned-sessions.prefs.v1",
+            persist: "dsh.session-focus.prefs.v1",
             actions: {
               setEnabled: (draft, value) => { draft.enabled = value === true; },
               toggleSessionPinsCollapsed: (draft) => {
@@ -939,12 +968,12 @@
 
           ctx.effect(
             () => ctx.locale.register(NS, { zh: ZH, en: EN }),
-            "dsh-pinned-sessions: dictionaries",
+            "dsh-session-focus: dictionaries",
           );
 
           ctx.slots.inject("shell.overlay", () => ctx.slots.register({
             name: "shell.overlay",
-            id: "pinned-sessions",
+            id: "session-focus",
             order: 20,
             store: prefs,
             locale: NS,
@@ -952,7 +981,7 @@
               openSession: (sessionId) => {
                 var service = ctx.get("uiWorkspace");
                 if (service === undefined || typeof service.openSession !== "function") {
-                  console.warn("[dsh-pinned-sessions] uiWorkspace.openSession is unavailable");
+                  console.warn("[dsh-session-focus] uiWorkspace.openSession is unavailable");
                   return;
                 }
                 service.openSession(sessionId);
@@ -962,7 +991,7 @@
 
           ctx.slots.inject("sidebar.workspaces.session.menu.item", () => ctx.slots.register({
             name: "sidebar.workspaces.session.menu.item",
-            id: "pinned-sessions",
+            id: "session-focus",
             order: GLOBAL_PIN_ORDER,
             store: prefs,
             locale: NS,
@@ -970,20 +999,20 @@
 
           ctx.slots.inject("settings.general.item", () => ctx.slots.register({
             name: "settings.general.item",
-            id: "pinned-sessions",
+            id: "session-focus",
             order: 40,
             store: prefs,
             locale: NS,
           }, PinnedSettingsRow));
         }
 
-        exports.name = "dsh-pinned-sessions";
+        exports.name = "dsh-session-focus";
         exports.inject = inject;
         exports.apply = apply;
         return module.exports;
       },
     });
   } catch (err) {
-    console.warn("[dsh-pinned-sessions] client half failed to load:", err);
+    console.warn("[dsh-session-focus] client half failed to load:", err);
   }
 })();

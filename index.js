@@ -1,5 +1,5 @@
 /**
- * Host half of dsh-pinned-sessions.
+ * Host half of dsh-session-focus, a fork of dsh-pinned-sessions.
  *
  * The feature is entirely client-side: it reads Session and Workspace state
  * through the Client's root-standard hooks and renders into the sidebar's
@@ -8,7 +8,7 @@
  */
 
 /** Plugin name shown by the loader. */
-export const name = 'pinned-sessions'
+export const name = 'session-focus'
 
 /** Host-plane entry point; this plugin owns no Host behavior. */
 export function apply() {}

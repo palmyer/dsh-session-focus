@@ -1,10 +1,25 @@
-# dsh-pinned-sessions
+# dsh-session-focus
 
-> **Found a bug or have a suggestion?** Open an [issue](https://github.com/TianYa-DAO/dsh-pinned-sessions/issues), or email [2842425998@qq.com](mailto:2842425998@qq.com).
+> A fork of [TianYa-DAO/dsh-pinned-sessions](https://github.com/TianYa-DAO/dsh-pinned-sessions).
+> The original aggregates only its own pin list; this fork also merges **DSH's own registry pin set**
+> (`workspaces.pinnedSessionIds`) into the same section, so sessions pinned through the shipped "..." menu
+> show up at the top too.
 
-Keeps the sessions a user must not lose track of at the top of the DSH Web sidebar workspace list, and lets any session or workspace be pinned there explicitly from its own "..." menu.
+Keeps every session you must not lose track of in one section at the top of the DSH Web sidebar: pinned, running, finished-but-unopened, and currently open.
 
 English | [中文](README.zh.md)
+
+## Differences from the original
+
+| | dsh-pinned-sessions | dsh-session-focus (this fork) |
+|---|---|---|
+| Sessions pinned from this plugin's menu | ✅ | ✅ |
+| **Sessions pinned through DSH natively** | ❌ not read | ✅ merged into the same section, listed first |
+| Running / Unread / Open now groups | ✅ | ✅ |
+| Pinned workspaces | ✅ | ✅ |
+
+A natively pinned session stays under the Host's control: it is unpinned from the shipped "..." menu row,
+and this plugin deliberately does not add a second control that would only clear the local list.
 
 ## What the pinned section holds
 
@@ -14,7 +29,7 @@ In this order, below the region header and above every workspace group:
 sidebar
 ├─ Workspaces            ← the region header (search / view options / add workspace)
 ├─ Pinned                ← added by this plugin
-│   ├─ Pinned 2          ← sessions pinned from their "..." menu
+│   ├─ Pinned 2          ← native pins + plugin pins, merged and deduped
 │   │   ● Session title…             proj
 │   ├─ Running 1         ← derived from session state
 │   │   ● Session title…             other
@@ -45,6 +60,8 @@ The section renders only while sessions are grouped by workspace (the "By worksp
 ## Pinning and unpinning
 
 1. A Session's "..." menu carries **Pin globally / Unpin globally** as a real entry in the shipped `sidebar.workspaces.session.menu.item` slot, alongside the shipped pin, rename, fork and archive rows.
+   A session already pinned through the Host registry does not show this row again — the shipped menu already
+   carries its unpin entry, and two entries for one thing would disagree with each other.
 2. A workspace's "..." menu carries the same action. DSH declares no slot for that menu, so the row is portaled into the shipped popup, located from the open row's `data-row-key="workspace:<key>"`.
 3. A pinned session row and a pinned workspace header both carry an unpin control that appears on hover — the workspace one matters because its ordinary row is hidden while it is pinned.
 
@@ -52,20 +69,21 @@ The section is inserted at the top of the list's own scroll container, so a long
 
 ## Settings
 
-**Settings → General → Pinned sessions** switches the section off and on. Preferences (the switch, the pinned sessions, the pinned workspaces and which pinned workspaces are collapsed) persist in the shared client store under localStorage key `dsh.pinned-sessions.prefs.v1`.
+**Settings → General → Pinned sessions** switches the section off and on. Preferences (the switch, the pinned sessions, the pinned workspaces and which pinned workspaces are collapsed) persist in the shared client store under localStorage key `dsh.session-focus.prefs.v1`.
 
 ## Install
 
-From npm:
+From GitHub:
 
 ```sh
-dsh plugin add dsh-pinned-sessions
+dsh plugin add github:palmyer/dsh-session-focus
 ```
 
-From a release tarball:
+Or clone locally and link it, so later edits reload without being overwritten by upstream releases:
 
 ```sh
-dsh plugin add https://github.com/TianYa-DAO/dsh-pinned-sessions/releases/latest/download/dsh-pinned-sessions-0.2.1.tgz
+git clone https://github.com/palmyer/dsh-session-focus.git
+dsh plugin add link:/absolute/path/to/dsh-session-focus
 ```
 
 In the desktop application, install it from the Plugins page instead. The package declares `dsh.bundle`, so the profile mounts its `cordis.patch.yml` row and the client registry serves `./client.js`. It also declares `engines.dsh` (`>=0.2.0-rc.2 <0.3.0`), so the market shows the host requirement and refuses a version it cannot run.

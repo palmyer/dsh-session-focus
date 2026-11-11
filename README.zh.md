@@ -1,10 +1,23 @@
-# dsh-pinned-sessions（置顶会话）
+# dsh-session-focus（会话聚焦区）
 
-> **反馈 / Feedback**：遇到 bug 或有改进建议，请到 [Issues](https://github.com/TianYa-DAO/dsh-pinned-sessions/issues) 提；也可以直接发邮件到 [2842425998@qq.com](mailto:2842425998@qq.com)。
+> 本仓库是 [TianYa-DAO/dsh-pinned-sessions](https://github.com/TianYa-DAO/dsh-pinned-sessions) 的 fork。
+> 原版只汇总插件自己的置顶集合；本 fork 额外把 **DSH 宿主自己的置顶集合**（`workspaces.pinnedSessionIds`）合并进同一个置顶区，
+> 所以在会话「...」菜单里用**原生置顶**标记的会话，也会出现在顶部。
 
-把你不该跟丢的会话固定在 DSH Web 侧栏工作区列表顶部，并且允许从任意会话/工作区自己的「...」菜单里**全局置顶**。
+把你不该跟丢的会话集中在 DSH Web 侧栏顶部：置顶的、正在运行的、跑完还没点开的、当前打开的，一处看完。
 
 [English](README.md) | 中文
+
+## 与原版的差异
+
+| | 原版 dsh-pinned-sessions | 本 fork dsh-session-focus |
+|---|---|---|
+| 插件自己菜单置顶的会话 | ✅ | ✅ |
+| **DSH 原生置顶的会话** | ❌ 不读取 | ✅ 合并进同一区，排在前面 |
+| 运行中 / 待查看 / 当前打开 分组 | ✅ | ✅ |
+| 置顶工作区 | ✅ | ✅ |
+
+原生置顶的会话由宿主自己管理：取消置顶用宿主「...」菜单里原有的那一项，本插件不会重复提供一个只清本地列表的按钮。
 
 ## 置顶区里有什么
 
@@ -14,7 +27,7 @@
 侧栏
 ├─ 工作区              ← 区域标题（搜索 / 视图选项 / 添加工作区）
 ├─ 置顶                ← 本插件插入
-│   ├─ 全局置顶 2       ← 从会话「...」菜单置顶的会话
+│   ├─ 全局置顶 2       ← 原生置顶 + 插件菜单置顶，合并去重
 │   │   ● 会话标题…            proj
 │   ├─ 进行中 1         ← 由会话状态推导
 │   │   ● 会话标题…            other
@@ -45,6 +58,7 @@
 ## 置顶与取消置顶
 
 1. 会话「...」菜单里新增 **全局置顶 / 取消全局置顶**：这是 DSH 官方槽位 `sidebar.workspaces.session.menu.item` 里的真实菜单项，和自带的置顶、重命名、分叉、归档并列。
+   已经用 DSH **原生置顶**标记的会话，不再重复显示这一项——避免同一件事有两个入口、语义还不一致。
 2. 工作区「...」菜单里同样新增这一项。DSH 没有为工作区菜单声明槽位，所以这一项是插件门户注入进那个弹层的——靠打开行的 `data-row-key="workspace:<key>"` 定位。
 3. 置顶会话行与置顶工作区标题行悬停时右侧都有取消置顶的 `×`；工作区那个是必需的，因为它原来的行在置顶期间被隐藏了。
 
@@ -52,20 +66,21 @@
 
 ## 开关
 
-**设置 → 通用 → 置顶会话区**。偏好（开关、置顶的会话、置顶的工作区、哪些置顶工作区是折叠的）持久化在共享客户端 store，localStorage 键为 `dsh.pinned-sessions.prefs.v1`。
+**设置 → 通用 → 置顶会话区**。偏好（开关、置顶的会话、置顶的工作区、哪些置顶工作区是折叠的）持久化在共享客户端 store，localStorage 键为 `dsh.session-focus.prefs.v1`。
 
 ## 安装
 
-npm：
+从 GitHub 安装：
 
 ```sh
-dsh plugin add dsh-pinned-sessions
+dsh plugin add github:palmyer/dsh-session-focus
 ```
 
-Release tarball：
+或先在本地克隆，再以 `link:` 方式接入（改代码后重载即生效，不受上游发布影响）：
 
 ```sh
-dsh plugin add https://github.com/TianYa-DAO/dsh-pinned-sessions/releases/latest/download/dsh-pinned-sessions-0.2.1.tgz
+git clone https://github.com/palmyer/dsh-session-focus.git
+dsh plugin add link:/绝对路径/dsh-session-focus
 ```
 
 桌面版可在「插件」页里安装。包内声明了 `dsh.bundle`，profile 会挂载它的 `cordis.patch.yml` 行，客户端注册表随之为浏览器提供 `./client.js`。包内还声明了 `engines.dsh`（`>=0.2.0-rc.2 <0.3.0`），市场据此显示宿主要求，并在不兼容时拦住安装。

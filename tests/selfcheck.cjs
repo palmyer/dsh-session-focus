@@ -11,8 +11,8 @@ const assert = require('assert')
 const CLIENT = path.join(__dirname, '..', 'client.js')
 let source = fs.readFileSync(CLIENT, 'utf8')
 source = source.replace(
-  'exports.name = "dsh-pinned-sessions";',
-  'exports.__debug = { deriveSections: deriveSections, baseName: baseName, toggleIn: toggleIn, cssEscape: cssEscape, PinnedSection: PinnedSection, dotOf: dotOf, SELECTORS: SELECTORS };\n        exports.name = "dsh-pinned-sessions";',
+  'exports.name = "dsh-session-focus";',
+  'exports.__debug = { deriveSections: deriveSections, baseName: baseName, toggleIn: toggleIn, cssEscape: cssEscape, PinnedSection: PinnedSection, dotOf: dotOf, SELECTORS: SELECTORS };\n        exports.name = "dsh-session-focus";',
 )
 
 let captured = null
@@ -36,7 +36,7 @@ vm.createContext(sandbox)
 vm.runInContext(source, sandbox, { filename: 'client.js' })
 
 assert.ok(captured !== null, 'module loader entry was not captured')
-assert.strictEqual(captured.id, 'dsh-pinned-sessions')
+assert.strictEqual(captured.id, 'dsh-session-focus')
 
 const h = (type, props, ...children) => ({ type, props: props || {}, children })
 const fakeReact = {
@@ -70,7 +70,7 @@ let localeDicts = null
 const SLOTS = ['shell.overlay', 'sidebar.workspaces.session.menu.item', 'settings.general.item']
 const ctx = {
   effect: (factory) => { factory(); return () => {} },
-  locale: { register: (ns, dicts) => { assert.strictEqual(ns, 'pinned-sessions'); localeDicts = dicts; return () => {} } },
+  locale: { register: (ns, dicts) => { assert.strictEqual(ns, 'session-focus'); localeDicts = dicts; return () => {} } },
   slots: {
     inject: (name, callback) => {
       assert.ok(SLOTS.includes(name), 'unexpected slot ' + name)
@@ -89,10 +89,10 @@ const overlay = bySlot('shell.overlay')
 const sessionMenu = bySlot('sidebar.workspaces.session.menu.item')
 const settings = bySlot('settings.general.item')
 assert.ok(overlay && sessionMenu && settings, 'missing registration')
-assert.strictEqual(overlay.options.id, 'pinned-sessions')
-assert.strictEqual(overlay.options.locale, 'pinned-sessions')
+assert.strictEqual(overlay.options.id, 'session-focus')
+assert.strictEqual(overlay.options.locale, 'session-focus')
 assert.strictEqual(sessionMenu.options.order, 450, 'the menu row sits after the shipped rows (100/200/300/400)')
-assert.strictEqual(sessionMenu.options.locale, 'pinned-sessions')
+assert.strictEqual(sessionMenu.options.locale, 'session-focus')
 assert.strictEqual(typeof overlay.options.inject, 'function', 'overlay needs the openSession face')
 assert.strictEqual(Object.keys(overlay.options.inject()).join(','), 'openSession')
 assert.ok(localeDicts && localeDicts.zh && localeDicts.en, 'dictionaries not registered')
