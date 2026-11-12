@@ -170,28 +170,62 @@ assert.strictEqual(derived.statusGroups[0].rows[0].dot, 'dshps-dot-running')
 assert.strictEqual(derived.statusGroups[1].rows[0].dot, 'dshps-dot-unread')
 assert.strictEqual(derived.statusGroups[2].rows[0].dot, 'dshps-dot-current')
 assert.strictEqual(derived.statusGroups[0].rows[0].where, 'proj')
+// The open Session is the one the main view retains: that row is `selected`,
+// exactly the flag the shipped row uses for its own highlight.
+assert.strictEqual(derived.statusGroups[2].rows[0].id, 'open')
+assert.strictEqual(derived.statusGroups[2].rows[0].selected, true, 'the open Session row is selected')
+assert.strictEqual(derived.statusGroups[0].rows[0].selected, false, 'a merely running Session is not selected')
 
-// explicit pins: order kept, archived/subagent/unknown members dropped, and a
-// pinned Session is left out of the status groups (its own dot carries the state).
+// ---- the three groups are mutually exclusive (upstream rule) ---------------
+// A Session is reported under the most important fact that applies to it, in the
+// order running > unread > open now. It never occupies two groups at once.
+const busyList = {
+  ids: ['busy'],
+  byId: { busy: { displayTitle: 'S-busy', updatedAt: 5, cwd: 'D:\\ws\\proj', retainedBy: { mainView: 1 } } },
+}
+const busyStatuses = new Map([['busy', { running: true }]])
+const busy = deriveSections(busyList, busyStatuses, workspaces, {})
+eq(busy.statusGroups.map(g => g.key), ['group.running'], 'a running open Session is reported under Running only')
+eq(busy.statusGroups[0].rows.map(r => r.id), ['busy'])
+
+// Running outranks a stale unread flag: the Session is listed under Running only.
+const resumedStatuses = new Map([['unread', { running: true, completionUnread: true }]])
+const resumed = deriveSections(
+  { ids: ['unread'], byId: { unread: { displayTitle: 'S-unread', updatedAt: 4, cwd: 'D:\\ws\\proj', retainedBy: {} } } },
+  resumedStatuses, workspaces, {},
+)
+eq(resumed.statusGroups.map(g => g.key), ['group.running'], 'a resumed Session is listed under Running only')
+
+// Unread outranks open now: an unread Session that is also the open one is
+// listed under Unread only.
+const unreadOpenStatuses = new Map([['open', { completionUnread: true }]])
+const unreadOpen = deriveSections(list, unreadOpenStatuses, workspaces, {})
+eq(unreadOpen.statusGroups.map(g => g.key), ['group.unread'], 'an unread open Session is listed under Unread only')
+
+// explicit pins: order kept, archived/subagent/unknown members dropped, and the
+// pin list is ADDITIVE — a pinned Session stays in its own status group too, so
+// opening the pinned list never moves a row out of the groups below it.
 const pinned = deriveSections(list, statuses, workspaces, {
   pinnedSessions: ['plain', 'run', 'arch', 'sub', 'gone'],
   pinnedWorkspaces: ['ws-other', 'ws-missing'],
 })
 eq(pinned.sessionPins.map(r => r.id), ['plain', 'run'])
 assert.strictEqual(pinned.sessionPins[1].dot, 'dshps-dot-running', 'a pinned row carries its own state dot')
-eq(pinned.statusGroups.map(g => g.key), ['group.unread', 'group.current'], 'pinned Sessions leave the status groups')
-eq(pinned.statusGroups[0].rows.map(r => r.id), ['unread'])
+eq(pinned.statusGroups.map(g => g.key), ['group.running', 'group.unread', 'group.current'], 'pinned Sessions keep their status group')
+eq(pinned.statusGroups[0].rows.map(r => r.id), ['run'], 'a pinned running Session is still listed under Running')
+eq(pinned.statusGroups[1].rows.map(r => r.id), ['unread'])
 eq(pinned.workspacePins.map(w => w.key), ['ws-other'])
 assert.strictEqual(pinned.workspacePins[0].title, 'other')
 eq(pinned.workspacePins[0].sessions.map(r => r.id), [], 'archived, subagent and non-current blank members are dropped')
 
-// collapsing the explicit pins hands them back to the state groups
+// collapsing the explicit pins changes nothing else: the state groups are the
+// same either way, which is the whole point of an additive pin list.
 const folded = deriveSections(list, statuses, workspaces, {
   pinnedSessions: ['run'],
   sessionPinsCollapsed: true,
 })
 eq(folded.sessionPins.map(r => r.id), ['run'])
-eq(folded.statusGroups[0].rows.map(r => r.id), ['run'], 'a collapsed pin group returns its Sessions to the state groups')
+eq(folded.statusGroups[0].rows.map(r => r.id), ['run'], 'a collapsed pin group leaves the state groups untouched')
 eq(folded.statusGroups.map(g => g.key), ['group.running', 'group.unread', 'group.current'])
 
 // blank Sessions appear only while they are the open one
@@ -220,6 +254,27 @@ assert.strictEqual(dotOf({ completionUnread: true }, true), 'dshps-dot-unread')
 assert.strictEqual(dotOf(undefined, true), 'dshps-dot-current')
 assert.strictEqual(dotOf(undefined, false), '')
 
+// A row with no state of its own must render an EMPTY cell. The base `.dshps-dot`
+// class therefore paints nothing; a grey base fill would put a dot on every
+// already-read Session, while the hollow ring for the open one is unchanged.
+const cssText = fs.readFileSync(CLIENT, 'utf8')
+const baseDotRule = /\.dshps-dot\{[^}]*\}/.exec(cssText)
+assert.ok(baseDotRule !== null, 'the base dot rule exists')
+assert.ok(
+  /background:\s*transparent/.test(baseDotRule[0]),
+  'the base dot paints nothing, so an already-read row shows no marker',
+)
+assert.ok(
+  !/background:\s*var\(--dsw-alias-label-(tertiary|secondary)\)/.test(baseDotRule[0]),
+  'the base dot does not fall back to a grey fill',
+)
+const currentDotRule = /\.dshps-dot-current\{[^}]*\}/.exec(cssText)
+assert.ok(currentDotRule !== null, 'the open Session still has its own ring rule')
+assert.ok(
+  /box-shadow:inset/.test(currentDotRule[0]),
+  'the open Session keeps its hollow ring unchanged',
+)
+
 // ---- presentation ---------------------------------------------------------
 const t = (key, params) => (params ? key + ':' + JSON.stringify(params) : key)
 const parts = {
@@ -227,13 +282,17 @@ const parts = {
   statusGroups: pinned.statusGroups,
   workspacePins: pinned.workspacePins,
 }
+const openedMenus = []
 const tree = PinnedSection({
   parts,
   collapsedWorkspaces: [],
   sessionPinsCollapsed: false,
+  collapsedStatusGroups: [],
+  toggleStatusGroup: () => {},
   toggleSessionPinsCollapsed: () => {},
   t,
   openSession: () => {},
+  openMenu: (sessionId, displayTitle, point) => { openedMenus.push({ sessionId, displayTitle, point }); return true; },
   unpinSession: () => {},
   unpinWorkspace: () => {},
   toggleWorkspaceOpen: () => {},
@@ -242,36 +301,146 @@ assert.strictEqual(tree.type, 'div')
 assert.strictEqual(tree.children[0].children[0], 'heading')
 // Order: live state groups first, then pinned workspaces, then the explicit
 // pin list last, so a long pin list never pushes the live groups away.
-assert.strictEqual(tree.children[1].length, 2, 'unread and current groups sit directly under the heading')
+assert.strictEqual(tree.children[1].length, 3, 'all three state groups sit directly under the heading')
 assert.strictEqual(tree.children[1][0].type.name, 'StatusGroup')
 assert.strictEqual(tree.children[3].type.name, 'SessionPinGroup')
-const pinGroup = tree.children[3].type(tree.children[3].props)
-const pinCaption = pinGroup.children[0]
-assert.strictEqual(pinCaption.children[0].props.className, 'dshps-groupToggle dshps-groupToggleOpen', 'the group caption carries the collapse toggle on its left')
-assert.strictEqual(pinCaption.children[0].props['aria-expanded'], 'true')
+// Every group now renders through CollapsibleGroup + GroupCaption, so the caption
+// is reached the same way for the state groups and the pin list.
+const renderGroup = (element) => {
+  // Group component -> CollapsibleGroup element -> its rendered div (caption + rows).
+  const collapsible = element.type(element.props)
+  const rendered = collapsible.type(collapsible.props)
+  const captionElement = rendered.children[0]
+  return {
+    caption: captionElement.type(captionElement.props),
+    rows: rendered.children[1],
+  }
+}
+const pinGroup = renderGroup(tree.children[3])
+const pinCaption = pinGroup.caption
+// The whole caption row is the control, so the collapse state and the click
+// handler live on the row itself; the chevron is a decorative glyph in its gutter.
+assert.strictEqual(pinCaption.props.className, 'dshps-groupHeader', 'the caption row itself is the collapse control')
+assert.strictEqual(pinCaption.props.role, 'button')
+assert.strictEqual(pinCaption.props.tabIndex, 0)
+assert.strictEqual(pinCaption.props['aria-expanded'], 'true')
+assert.strictEqual(typeof pinCaption.props.onClick, 'function', 'clicking anywhere on the row toggles it')
+assert.strictEqual(pinCaption.children[0].props.className, 'dshps-groupChevron dshps-groupChevronOpen', 'the chevron is decorative and mirrors the state')
+assert.strictEqual(pinCaption.children[0].props['aria-hidden'], 'true')
 assert.strictEqual(pinCaption.children[1].children[0], 'group.sessionPins')
-const pinRows = pinGroup.children[1].map(element => element.type(element.props))
+const pinRows = pinGroup.rows.map(element => element.type(element.props))
 assert.strictEqual(pinRows.length, 2)
 assert.strictEqual(pinRows[0].children[1].children[0], 'S-plain')
 const pinRow = pinRows[1]
-assert.strictEqual(pinRow.props.className, 'dshps-row')
+assert.strictEqual(pinRow.props.className, 'dshps-row', 'an unselected row carries no selected class')
+assert.strictEqual(pinRow.props['aria-selected'], 'false')
 assert.strictEqual(pinRow.children[0].children[0].props.className, 'dshps-dot dshps-dot-running')
 assert.strictEqual(pinRow.children[1].children[0], 'S-run')
+// The hover cluster carries exactly one control: the shipped session menu
+// trigger. There is no hand-built archive/pin pair, so no duplicate
+// implementation of the row actions.
 const actionCluster = pinRow.children[3]
-assert.strictEqual(actionCluster.props.className, 'dshps-actions', 'trailing actions live in their own overlay cluster')
-assert.strictEqual(actionCluster.children[0].props.className, 'dshps-action', 'a locally pinned row carries an unpin control')
+assert.strictEqual(actionCluster.props.className, 'dshps-actions')
+assert.strictEqual(actionCluster.children.length, 1, 'the cluster holds one control, not a parallel button pair')
+const moreButton = actionCluster.children[0]
+assert.strictEqual(moreButton.props.className, 'dshps-action')
+assert.strictEqual(moreButton.props['aria-haspopup'], 'menu', 'the one control opens the shipped session menu')
+assert.strictEqual(moreButton.children[0], '…')
 assert.strictEqual(pinRow.props.onContextMenu !== undefined, true, 'right-click opens the shipped session menu')
-const collapsedPins = tree.children[3].type(Object.assign({}, tree.children[3].props, { collapsed: true }))
-assert.strictEqual(collapsedPins.children[1], null, 'a collapsed global-pin group renders no rows')
-assert.strictEqual(collapsedPins.children[0].children[0].props.className, 'dshps-groupToggle')
-assert.strictEqual(collapsedPins.children[0].children[0].props['aria-expanded'], 'false')
-assert.strictEqual(collapsedPins.children[0].children[2].children[0], '2', 'the count stays readable while collapsed')
+
+// Clicking that one control really opens the shipped menu for this Session —
+// the row does not perform archive/pin itself.
+moreButton.props.onClick({ currentTarget: { getBoundingClientRect: () => ({ left: 10, bottom: 20 }) }, preventDefault() {}, stopPropagation() {} })
+assert.strictEqual(openedMenus.length, 1, 'the hover control opens the shipped session menu')
+assert.strictEqual(openedMenus[0].sessionId, 'run')
+const collapsedPins = renderGroup(Object.assign({}, tree.children[3], {
+  props: Object.assign({}, tree.children[3].props, { collapsed: true }),
+}))
+assert.strictEqual(collapsedPins.rows, null, 'a collapsed global-pin group renders no rows')
+const collapsedCaption = collapsedPins.caption
+assert.strictEqual(collapsedCaption.props.className, 'dshps-groupHeader', 'the collapsed caption is still the whole-row control')
+assert.strictEqual(collapsedCaption.props['aria-expanded'], 'false')
+assert.strictEqual(collapsedCaption.children[0].props.className, 'dshps-groupChevron')
+assert.strictEqual(collapsedCaption.children[2].children[0], '2', 'the count stays readable while collapsed')
 const statusList = tree.children[1]
-assert.strictEqual(statusList.length, 2, 'unread and current groups (the pinned running Session left them)')
+assert.strictEqual(statusList.length, 3, 'all three state groups render (pinning never removes a Session from them)')
 assert.strictEqual(statusList[0].type.name, 'StatusGroup')
+// The open Session lives in the "Open now" group; its rendered row must carry
+// the shipped selected treatment, not a bespoke one.
+const currentGroup = renderGroup(statusList[2])
+const currentRow = currentGroup.rows[0].type(currentGroup.rows[0].props)
+assert.strictEqual(currentRow.props.className, 'dshps-row dshps-selected', 'the open Session row carries the selected class')
+assert.strictEqual(currentRow.props['aria-selected'], 'true', 'the open Session row is marked selected for assistive tech')
+// A status group folds through the SAME caption component as the pin list.
+const runningGroup = renderGroup(statusList[0])
+const runningCaption = runningGroup.caption
+assert.strictEqual(runningCaption.props.className, 'dshps-groupHeader', 'a status group caption is the same whole-row control')
+assert.strictEqual(runningCaption.props.role, 'button')
+assert.strictEqual(typeof runningCaption.props.onClick, 'function')
+assert.strictEqual(runningCaption.children[1].children[0], 'group.running')
+const foldedByKey = renderGroup(Object.assign({}, statusList[0], {
+  props: Object.assign({}, statusList[0].props, { collapsed: true }),
+}))
+assert.strictEqual(foldedByKey.rows, null, 'a collapsed status group renders no rows')
+
+// ---- one fold mechanism for every group -----------------------------------
+// The state groups, the pinned-workspaces caption and the pin list must all go
+// through the same caption contract; otherwise they drift apart again.
+const allGroups = [
+  statusList[0], statusList[1], statusList[2],      // running / unread / open now
+  tree.children[3],                                  // global pins
+]
+for (const element of allGroups) {
+  const rendered = renderGroup(element)
+  const caption = rendered.caption
+  assert.strictEqual(caption.props.className, 'dshps-groupHeader', 'every group caption is the same component')
+  assert.strictEqual(caption.props.role, 'button')
+  assert.strictEqual(caption.props.tabIndex, 0)
+  assert.strictEqual(typeof caption.props.onClick, 'function', 'every group folds from its whole caption row')
+  assert.strictEqual(typeof caption.props.onKeyDown, 'function', 'every group folds from the keyboard too')
+  assert.strictEqual(caption.props['aria-expanded'], 'true', 'every group starts expanded')
+  assert.strictEqual(caption.children[0].props['aria-hidden'], 'true', 'every chevron is decorative')
+  const folded = renderGroup(Object.assign({}, element, {
+    props: Object.assign({}, element.props, { collapsed: true }),
+  }))
+  assert.strictEqual(folded.rows, null, 'every group hides its rows when folded')
+  assert.strictEqual(folded.caption.props['aria-expanded'], 'false')
+}
+
+// The pinned-workspaces block is a plain div wrapping a GroupCaption element, so
+// it is checked through its caption element directly.
+const workspaceCaptionElement = tree.children[2].children[0]
+assert.strictEqual(workspaceCaptionElement.type.name, 'GroupCaption', 'the pinned-workspaces caption is the shared component')
+assert.strictEqual(workspaceCaptionElement.props.collapsed, false)
+assert.strictEqual(typeof workspaceCaptionElement.props.onToggle, 'function')
+
+// Folding is tracked per group key, not by one shared boolean.
+const foldedKeys = []
+const sectionWithFolds = PinnedSection({
+  parts,
+  collapsedWorkspaces: [],
+  sessionPinsCollapsed: false,
+  collapsedStatusGroups: ['group.unread'],
+  toggleStatusGroup: (key) => foldedKeys.push(key),
+  toggleSessionPinsCollapsed: () => foldedKeys.push('pins'),
+  t,
+  openSession: () => {},
+  unpinSession: () => {},
+  unpinWorkspace: () => {},
+  toggleWorkspaceOpen: () => {},
+})
+const statusesAfterFold = sectionWithFolds.children[1]
+for (const element of statusesAfterFold) renderGroup(element)
+const unreadFolded = renderGroup(statusesAfterFold[1])
+const runningOpen = renderGroup(statusesAfterFold[0])
+assert.strictEqual(unreadFolded.rows, null, 'only the folded group collapses')
+assert.notStrictEqual(runningOpen.rows, null, 'a sibling group stays expanded')
+assert.strictEqual(runningOpen.caption.props['aria-expanded'], 'true')
 const workspaceSection = tree.children[2]
 assert.strictEqual(workspaceSection.props.className, 'dshps-group')
-assert.strictEqual(workspaceSection.children[0].children[0].children[0], 'group.workspacePins')
+const workspaceCaption = workspaceSection.children[0].type(workspaceSection.children[0].props)
+assert.strictEqual(workspaceCaption.children[1].children[0], 'group.workspacePins', 'the pinned-workspaces caption folds the same way')
+assert.strictEqual(workspaceCaption.props.role, 'button')
 const wsGroupElement = workspaceSection.children[1][0]
 const wsGroup = wsGroupElement.type(wsGroupElement.props)
 assert.strictEqual(wsGroup.props.className, 'dshps-wsGroup')

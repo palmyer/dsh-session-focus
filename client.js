@@ -61,7 +61,6 @@
         var RECONCILE_MS = 1500;
         var PRUNE_GRACE_MS = 60000;
         var WORKSPACE_ROW_PREFIX = "workspace:";
-        var SESSION_ROW_PREFIX = "session:";
         var GLOBAL_PIN_ORDER = 450;
         /**
          * Every shipped-DOM fact this plugin depends on, in one place. A sidebar
@@ -89,17 +88,26 @@
           ".dshps-host{box-sizing:border-box;flex:none;padding-bottom:6px;margin-bottom:2px;border-bottom:.5px solid var(--dsw-alias-border-l2)}",
           ".dshps-heading{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;padding:2px 8px;letter-spacing:.02em}",
           ".dshps-group{padding-top:2px}",
-          ".dshps-groupTitle{position:relative;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;padding:2px 8px 2px 28px;display:flex;align-items:center;gap:6px}",
-          ".dshps-groupToggle{position:absolute;left:9px;top:2px;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-sm,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-family:inherit;font-size:11px;line-height:16px;text-align:center;transition:transform .12s ease}",
-          ".dshps-groupToggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
-          ".dshps-groupToggle:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:0}",
-          ".dshps-groupToggleOpen{transform:rotate(90deg)}",
+          // The whole caption row is the collapse control, so it needs to look and
+          // behave like a target: full width, rounded, with the same hover fill the
+          // native group headers use. The chevron sits in the gutter on its left.
+          ".dshps-groupHeader{box-sizing:border-box;position:relative;width:100%;color:var(--dsw-alias-label-tertiary);font-family:inherit;font-size:11px;line-height:16px;padding:2px 8px 2px 28px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;border-radius:var(--dsw-radius-sm,4px)}",
+          ".dshps-groupHeader:hover{background:var(--dsw-alias-interactive-bg-hover)}",
+          ".dshps-groupHeader:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:0}",
+          ".dshps-groupChevron{position:absolute;left:9px;top:2px;width:16px;height:16px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;text-align:center;transition:transform .12s ease}",
+          ".dshps-groupChevronOpen{transform:rotate(90deg)}",
           ".dshps-count{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}",
           ".dshps-row{position:relative;box-sizing:border-box;width:100%;height:32px;padding:0 8px;border:0;background:transparent;border-radius:var(--dsw-radius-md,8px);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:14px;line-height:20px;text-align:left;cursor:pointer;user-select:none;display:flex;align-items:center;gap:0;overflow:hidden}",
           ".dshps-row:hover{background:var(--dsw-alias-interactive-bg-hover)}",
+          // Exactly the shipped rule for a selected Session row
+          // (`.wnFoaW_sessionRow.wnFoaW_selected`): the same token, the same fill.
+          ".dshps-row.dshps-selected{background-color:var(--dsw-alias-interactive-bg-hover)}",
           ".dshps-row:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}",
           ".dshps-dotCell{width:16px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}",
-          ".dshps-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--dsw-alias-label-tertiary)}",
+          // The base dot paints nothing: a row with no state of its own must show
+          // an empty cell, not a grey marker. Only the three explicit states below
+          // draw something — running, unread, and the hollow ring for the open one.
+          ".dshps-dot{width:7px;height:7px;border-radius:50%;flex:none;background:transparent}",
           ".dshps-dot-running{background:var(--dsw-alias-state-business-primary,#4d6bfe);animation:dshps-pulse 1.4s ease-in-out infinite}",
           ".dshps-dot-unread{background:var(--dsw-alias-state-success-primary,#12b76a)}",
           ".dshps-dot-current{background:transparent;box-shadow:inset 0 0 0 2px var(--dsw-alias-label-secondary)}",
@@ -107,19 +115,25 @@
           ".dshps-title{flex:1;min-width:0;margin:0 6px 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
           ".dshps-titleButton{background:transparent;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}",
           ".dshps-where{flex:none;max-width:42%;margin-left:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-          // The trailing cluster overlays the end of the row instead of taking part
-          // in its flex layout, so revealing it never shifts the title and never
-          // spills onto the rows above or below. Its backdrop fades in from nothing
-          // so the ellipsis of a long title stays legible on hover.
-          ".dshps-actions{position:absolute;top:50%;right:6px;transform:translateY(-50%);display:flex;align-items:center;gap:2px;padding-left:12px;background:linear-gradient(to right,transparent,var(--dsw-alias-interactive-bg-hover) 12px)}",
-          ".dshps-action{width:20px;height:20px;flex:none;margin:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:12px;line-height:20px;opacity:0}",
-          ".dshps-row:hover .dshps-action,.dshps-row:focus-within .dshps-action,.dshps-wsHeader:hover .dshps-action,.dshps-action:focus-visible{opacity:1}",
-          // The native row keeps its trailing actions visible on touch devices,
-          // where there is no hover to reveal them.
-          "@media (hover:none){.dshps-action{opacity:1}}",
-          ".dshps-more{font-size:14px;line-height:18px;letter-spacing:1px}",
-          ".dshps-row:hover .dshps-more{color:var(--dsw-alias-label-secondary)}",
-          ".dshps-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
+          // Hover cluster, built to the shipped row's own metrics: nothing is drawn
+          // at rest (the shipped `.rowActions` is `display:none`, not transparent),
+          // and hovering swaps the resting metadata for the actions, exactly as the
+          // shipped row swaps `.rowResting` for `.rowActions`.
+          //
+          // No backdrop and no gradient here: the cluster sits over the row's own
+          // hover fill, and a second painted layer was what produced the stray
+          // vertical gradient strip even while the row was at rest.
+          ".dshps-actions{position:absolute;top:50%;right:6px;transform:translateY(-50%);display:none;align-items:center;gap:13px;margin:-4px}",
+          ".dshps-row:hover .dshps-actions,.dshps-row:focus-within .dshps-actions,.dshps-wsHeader:hover .dshps-actions{display:inline-flex}",
+          // The shipped row hides its resting cluster on hover so the actions can
+          // use that space; mirror it instead of letting the two overlap.
+          ".dshps-row:hover .dshps-where,.dshps-row:focus-within .dshps-where{display:none}",
+          // Shipped `.iconButton`: 24x24, radius-xs, tertiary label, transparent.
+          ".dshps-action{width:24px;height:24px;flex:none;margin:0;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:14px;line-height:24px;text-align:center;display:inline-flex;align-items:center;justify-content:center}",
+          ".dshps-action:focus-visible{outline-offset:-2px}",
+          ".dshps-action:hover{color:var(--dsw-alias-label-primary)}",
+          // Hoverless devices have no hover to reveal the cluster, so keep it shown.
+          "@media (hover:none){.dshps-actions{display:inline-flex}}",
           ".dshps-wsGroup{padding-top:2px}",
           ".dshps-wsHeader{box-sizing:border-box;width:100%;height:32px;padding:0 8px;border:0;background:transparent;border-radius:var(--dsw-radius-md,8px);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:14px;line-height:20px;text-align:left;cursor:pointer;user-select:none;display:flex;align-items:center;gap:0}",
           ".dshps-wsHeader:hover{background:var(--dsw-alias-interactive-bg-hover)}",
@@ -274,6 +288,12 @@
               updatedAt: typeof session.updatedAt === "number" ? session.updatedAt : 0,
               where: whereBySession[id] || baseName(session.cwd),
               dot: dotOf(status, id === currentId),
+              // The shipped row marks the Session held by the main view as
+              // `selected` and paints it with the hover fill. Reuse exactly that
+              // rule here so the pinned copy of an open Session looks selected the
+              // same way the original row does, instead of inventing a second
+              // highlight.
+              selected: id === currentId,
             };
           };
 
@@ -305,19 +325,19 @@
             var pinnedRow = rowOf(pinnedSessions[p]);
             if (pinnedRow !== null) { pinnedRow.localPinned = true; sessionPins.push(pinnedRow); }
           }
-          // A pinned Session is listed once while its part is expanded; collapsing
-          // that part hands it back to the state groups, so folding the pins away
-          // can never hide a running or unread Session from the screen.
-          var pinsCollapsed = prefs !== null && typeof prefs === "object" && prefs.sessionPinsCollapsed === true;
-          var pinnedIds = {};
-          for (var q = 0; q < sessionPins.length; q++) pinnedIds[sessionPins[q].id] = true;
-
+          // The explicit pin list is ADDITIVE: a pinned Session keeps its place in
+          // the state groups below, so opening the pinned list never takes a row
+          // away from another group and the rest of the sidebar keeps its layout.
+          //
+          // The three state groups stay mutually exclusive, ranked running >
+          // unread > open now, exactly as upstream defines them: a Session is
+          // reported under the most important fact that applies to it, not under
+          // every fact it happens to satisfy.
           var running = [];
           var unread = [];
           var current = [];
           for (var i = 0; i < list.ids.length; i++) {
             var id = list.ids[i];
-            if (pinsCollapsed !== true && pinnedIds[id] === true) continue;
             var row = rowOf(id);
             if (row === null) continue;
             var state = statuses && typeof statuses.get === "function" ? statuses.get(id) : undefined;
@@ -592,50 +612,25 @@
         }
 
         /**
-         * Hide the list entries a pinned workspace already covers. Applied only
-         * while the pinned section is on screen, so nothing can disappear when
-         * the section itself is hidden (rail, flat list, search).
+         * Kept as a no-op on purpose: pinning a workspace is additive here.
+         *
+         * This fork used to rewrite a stylesheet that set `display:none` on the
+         * workspace row and on every member Session row, so a pinned workspace
+         * replaced its own group in the list. That changed the existing layout of
+         * everything below the pinned section, and unpinning had to put it all
+         * back. The pinned section is now purely additive: a pinned workspace is
+         * listed at the top and its own group stays exactly where the sidebar
+         * draws it.
+         *
+         * The parameter list is unchanged so callers and self-checks keep working.
          */
         function useGroupHiding(active, pinnedWorkspaces, workspaceItems) {
-          var broken = react.useRef(false);
           react.useEffect(() => {
             if (typeof document === "undefined") return undefined;
+            // Clear the rules a previous version of this plugin may have left
+            // behind, so an upgrade cannot keep hiding rows it no longer owns.
             var tag = document.getElementById(HIDE_STYLE_ID);
-            if (!active || broken.current) {
-              if (tag !== null && tag.textContent !== "") tag.textContent = "";
-              return undefined;
-            }
-            if (tag === null) {
-              tag = document.createElement("style");
-              tag.id = HIDE_STYLE_ID;
-              tag.dataset.plugin = "dsh-session-focus";
-              document.head.appendChild(tag);
-            }
-            var rules = [];
-            var items = Array.isArray(workspaceItems) ? workspaceItems : [];
-            var pinned = listOf(pinnedWorkspaces);
-            for (var i = 0; i < pinned.length; i++) {
-              var key = pinned[i];
-              rules.push('[data-row-key="' + WORKSPACE_ROW_PREFIX + cssEscape(key) + '"]{display:none !important}');
-              for (var j = 0; j < items.length; j++) {
-                if (!items[j] || items[j].workspaceId !== key) continue;
-                var members = Array.isArray(items[j].sessionIds) ? items[j].sessionIds : [];
-                for (var m = 0; m < members.length; m++) {
-                  rules.push('[data-row-key="' + SESSION_ROW_PREFIX + cssEscape(members[m]) + '"]{display:none !important}');
-                }
-              }
-            }
-            var text = rules.join("");
-            if (tag.textContent !== text) tag.textContent = text;
-            if (pinned.length === 0) return undefined;
-            // A rule that matches nothing hides nothing while the row is still
-            // listed, so one probe decides whether hiding works at all. Failing
-            // open (show it twice) beats hiding the wrong row or nothing visible.
-            var probe = document.querySelector('[data-row-key="' + WORKSPACE_ROW_PREFIX + cssEscape(pinned[0]) + '"]');
-            if (probe === null || window.getComputedStyle(probe).display === "none") return undefined;
-            broken.current = true;
-            tag.textContent = "";
-            console.warn("[dsh-session-focus] hiding did not apply; the pinned workspace also stays in the list");
+            if (tag !== null && tag.textContent !== "") tag.textContent = "";
             return undefined;
           }, [active, pinnedWorkspaces, workspaceItems]);
         }
@@ -661,7 +656,6 @@
           var hint = row.where === "" ? title : title + " · " + row.where;
           if (stamp !== "") hint += " · " + stamp;
           var canMenu = typeof props.openMenu === "function";
-          var canUnpin = typeof props.onUnpin === "function" && row.hostPinned !== true;
           // The shipped rows open their menu at the pointer, or under the row for a
           // keyboard open (where the pointer coordinates are both zero).
           var showMenu = (point, event) => {
@@ -676,8 +670,12 @@
             props.openMenu(row.id, title, at);
           };
           return h("div", {
-            className: "dshps-row",
+            // The shipped row sets `selected` on the row held by the main view and
+            // styles it with the hover fill; `aria-selected` carries the same fact
+            // for assistive tech. Both are mirrored here.
+            className: "dshps-row" + (row.selected === true ? " dshps-selected" : ""),
             "data-dshps-row": row.id,
+            "aria-selected": row.selected === true ? "true" : "false",
             onContextMenu: (event) => {
               var keyboard = event.clientX === 0 && event.clientY === 0;
               showMenu(keyboard ? undefined : { x: event.clientX, y: event.clientY }, event);
@@ -699,24 +697,18 @@
               },
             }, title),
             row.where === "" ? null : h("span", { className: "dshps-where" }, row.where),
-            // The trailing cluster is taken OUT of flow: revealing it on hover must
-            // not reflow the title or the workspace label, and it must never paint
-            // outside its own row (in particular not over the neighbouring rows).
-            // A Host-pinned row keeps its unpin entry in the shipped "..." menu, so
-            // only a pin this plugin owns gets the inline × here, ahead of "...".
-            // An empty cluster would still paint its backdrop over the title, so it
-            // is not rendered at all when it would hold nothing.
-            canUnpin || canMenu ? h("span", { className: "dshps-actions" },
-              canUnpin ? h("button", {
+            // Hover reveals ONE control: the shipped session menu trigger, which is
+            // the same menu the row below opens and carries the same items
+            // (pin / unpin / rename / fork / archive, plus whatever other plugins
+            // contribute). Deliberately not a second archive/pin button pair: the
+            // shipped `sidebar.workspaces.session.row.action` seat is rendered by
+            // the shipped row only, and a plugin cannot render it again without
+            // re-declaring that slot, so a hand-built pair would be exactly the
+            // duplicate implementation this section is supposed to avoid.
+            canMenu ? h("span", { className: "dshps-actions" },
+              h("button", {
                 type: "button",
                 className: "dshps-action",
-                title: props.t("action.unpin"),
-                "aria-label": props.t("action.unpin"),
-                onClick: (event) => { event.stopPropagation(); props.onUnpin(); },
-              }, "×") : null,
-              canMenu ? h("button", {
-                type: "button",
-                className: "dshps-action dshps-more",
                 title: props.t("row.more"),
                 "aria-label": props.t("row.more", { name: title }),
                 "aria-haspopup": "menu",
@@ -724,49 +716,92 @@
                   var rect = event.currentTarget.getBoundingClientRect();
                   showMenu({ x: rect.left, y: rect.bottom }, event);
                 },
-              }, "…") : null,
+              }, "…"),
             ) : null,
+          );
+        }
+
+        /**
+         * The one caption used by every collapsible group in this section.
+         *
+         * The whole row is the control — not just the chevron — because a 16px
+         * glyph is a fiddly target and the sidebar's own group headers behave the
+         * same way. Enter and Space toggle it once the row has focus, so the
+         * caption is reachable without a mouse.
+         *
+         * Every group goes through this component on purpose: the state groups and
+         * the explicit pin list must not drift into two different fold behaviours.
+         */
+        function GroupCaption(props) {
+          var collapsed = props.collapsed === true;
+          var toggle = () => {
+            if (typeof props.onToggle === "function") props.onToggle();
+          };
+          return h("div", {
+            className: "dshps-groupHeader",
+            role: "button",
+            tabIndex: 0,
+            "aria-expanded": collapsed ? "false" : "true",
+            "aria-label": props.t(collapsed ? "group.expand" : "group.collapse", { name: props.name }),
+            onClick: toggle,
+            onKeyDown: (event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              toggle();
+            },
+          },
+            h("span", {
+              className: "dshps-groupChevron" + (collapsed ? "" : " dshps-groupChevronOpen"),
+              "aria-hidden": "true",
+            }, "›"),
+            h("span", null, props.name),
+            h("span", { className: "dshps-count" }, String(props.count)),
+          );
+        }
+
+        /** A caption row plus its rows, folded as one unit when the caption is. */
+        function CollapsibleGroup(props) {
+          return h("div", { className: props.className || "dshps-group" },
+            h(GroupCaption, {
+              name: props.name,
+              count: props.count,
+              collapsed: props.collapsed,
+              onToggle: props.onToggle,
+              t: props.t,
+            }),
+            props.collapsed === true ? null : props.rows,
           );
         }
 
         /** Caption plus rows for one derived status group. */
         function StatusGroup(props) {
           var group = props.group;
-          return h("div", { className: "dshps-group" },
-            h("div", { className: "dshps-groupTitle" },
-              h("span", null, props.t(group.key)),
-              h("span", { className: "dshps-count" }, String(group.rows.length)),
-            ),
-            group.rows.map(row => h(PinnedRow, {
+          return h(CollapsibleGroup, {
+            name: props.t(group.key),
+            count: group.rows.length,
+            collapsed: props.collapsed === true,
+            onToggle: props.onToggle,
+            t: props.t,
+            rows: group.rows.map(row => h(PinnedRow, {
               key: row.id,
               row: row,
               t: props.t,
               openSession: props.openSession,
               openMenu: props.openMenu,
             })),
-          );
+          });
         }
 
-        /** One explicitly pinned Session list, collapsible from its caption. */
+        /** One explicitly pinned Session list, collapsible from its whole caption row. */
         function SessionPinGroup(props) {
           if (props.rows.length === 0) return null;
-          var collapsed = props.collapsed === true;
-          var name = props.t("group.sessionPins");
-          return h("div", { className: "dshps-group" },
-            h("div", { className: "dshps-groupTitle" },
-              h("button", {
-                type: "button",
-                className: "dshps-groupToggle" + (collapsed ? "" : " dshps-groupToggleOpen"),
-                "aria-expanded": collapsed ? "false" : "true",
-                "aria-label": props.t(collapsed ? "group.expand" : "group.collapse", { name: name }),
-                onClick: () => {
-                  if (typeof props.onToggleCollapsed === "function") props.onToggleCollapsed();
-                },
-              }, "›"),
-              h("span", null, name),
-              h("span", { className: "dshps-count" }, String(props.rows.length)),
-            ),
-            collapsed ? null : props.rows.map(row => h(PinnedRow, {
+          return h(CollapsibleGroup, {
+            name: props.t("group.sessionPins"),
+            count: props.rows.length,
+            collapsed: props.collapsed === true,
+            onToggle: props.onToggleCollapsed,
+            t: props.t,
+            rows: props.rows.map(row => h(PinnedRow, {
               key: row.id,
               row: row,
               t: props.t,
@@ -774,7 +809,7 @@
               openMenu: props.openMenu,
               onUnpin: () => { props.unpinSession(row.id); },
             })),
-          );
+          });
         }
 
         /** One explicitly pinned workspace: a collapsible group of its Sessions. */
@@ -820,6 +855,13 @@
         function PinnedSection(props) {
           var parts = props.parts;
           if (parts.sessionPins.length === 0 && parts.statusGroups.length === 0 && parts.workspacePins.length === 0) return null;
+          // Older persisted state has no fold list; reading it as empty keeps every
+          // group expanded instead of throwing on the first render.
+          var folded = listOf(props.collapsedStatusGroups);
+          var isFolded = (key) => folded.indexOf(key) >= 0;
+          var toggleFolded = (key) => {
+            if (typeof props.toggleStatusGroup === "function") props.toggleStatusGroup(key);
+          };
           // Order matters. The groups that change by themselves (running, unread,
           // open now) sit right under the heading, because those are what the user
           // scans for. Pinned workspaces follow, and the explicit pin list is LAST:
@@ -830,13 +872,21 @@
             parts.statusGroups.map(group => h(StatusGroup, {
               key: group.key,
               group: group,
+              collapsed: isFolded(group.key),
+              onToggle: () => { toggleFolded(group.key); },
               t: props.t,
               openSession: props.openSession,
               openMenu: props.openMenu,
             })),
             parts.workspacePins.length === 0 ? null : h("div", { className: "dshps-group" },
-              h("div", { className: "dshps-groupTitle" }, h("span", null, props.t("group.workspacePins"))),
-              parts.workspacePins.map(workspace => h(WorkspacePinGroup, {
+              h(GroupCaption, {
+                name: props.t("group.workspacePins"),
+                count: parts.workspacePins.length,
+                collapsed: isFolded("group.workspacePins"),
+                onToggle: () => { toggleFolded("group.workspacePins"); },
+                t: props.t,
+              }),
+              isFolded("group.workspacePins") ? null : parts.workspacePins.map(workspace => h(WorkspacePinGroup, {
                 key: workspace.key,
                 workspace: workspace,
                 collapsed: props.collapsedWorkspaces.indexOf(workspace.key) >= 0,
@@ -975,6 +1025,8 @@
               collapsedWorkspaces: listOf(prefs && prefs.collapsedWorkspaces),
               sessionPinsCollapsed: prefs !== null && typeof prefs === "object" && prefs.sessionPinsCollapsed === true,
               toggleSessionPinsCollapsed: () => { props.actions.toggleSessionPinsCollapsed(); },
+              collapsedStatusGroups: listOf(prefs && prefs.collapsedStatusGroups),
+              toggleStatusGroup: (key) => { props.actions.toggleStatusGroup(key); },
               t: props.t,
               openSession: props.openSession,
               openMenu: props.openMenu,
@@ -1019,12 +1071,18 @@
 
         function apply(ctx) {
           var prefs = clientStore.defineStore({
-            init: () => ({ enabled: true, pinnedSessions: [], pinnedWorkspaces: [], collapsedWorkspaces: [], sessionPinsCollapsed: false }),
+            init: () => ({ enabled: true, pinnedSessions: [], pinnedWorkspaces: [], collapsedWorkspaces: [], sessionPinsCollapsed: false, collapsedStatusGroups: [] }),
             persist: "dsh.session-focus.prefs.v1",
             actions: {
               setEnabled: (draft, value) => { draft.enabled = value === true; },
               toggleSessionPinsCollapsed: (draft) => {
                 draft.sessionPinsCollapsed = draft.sessionPinsCollapsed !== true;
+              },
+              // The derived status groups fold through the same store as the pin
+              // list, keyed by their own caption key, so one mechanism covers every
+              // group in the section and each fold is remembered across reloads.
+              toggleStatusGroup: (draft, key) => {
+                draft.collapsedStatusGroups = toggleIn(draft.collapsedStatusGroups, key);
               },
               toggleSession: (draft, sessionId) => {
                 draft.pinnedSessions = toggleIn(draft.pinnedSessions, sessionId);

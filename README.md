@@ -37,11 +37,15 @@ sidebar
 │   ├─ Open now 1
 │   └─ Pinned workspaces ← workspaces pinned from their "..." menu
 │       ▸ proj  4
-├─ Workspace group A     ← a pinned workspace is hidden here
+├─ Workspace group A     ← untouched
 └─ Workspace group B
 ```
 
-1. **Globally pinned sessions** — chosen from a Session's "..." menu; they stay in their own workspace group below as well. A small chevron on the left of the caption folds this part to its heading (the count stays readable), and while it is folded these Sessions are listed in their state groups again, so folding never hides a running or unread one.
+> **The section is additive only.** It inserts its own block at the top and leaves the order, contents and visibility of every group below it alone. Expanding or folding any group never removes a row from another group.
+
+> **Every group folds, the same way.** Running, Unread, Open now, Pinned workspaces and the pin list all use one collapsible caption: **click the whole row** (not just the chevron), or focus it and press Enter / Space. The count stays readable while folded, and each group remembers its own fold state across reloads.
+
+1. **Globally pinned sessions** — chosen from a Session's "..." menu; they stay in their own workspace group below as well.
 2. **Running / Unread / Open now** — derived from session state:
 
    | Group | Condition | Marker |
@@ -50,8 +54,12 @@ sidebar
    | Unread | session status `completionUnread === true` (finished while you had not opened it) | green dot |
    | Open now | session retained by the main view (`retainedBy.mainView > 0`) | hollow ring |
 
-   A session appears in one of these groups only, in that priority order. A globally pinned session is left out of these groups while the pinned part is expanded — the dot on its row carries the same state — and returns to them while that part is folded.
-3. **Globally pinned workspaces** — chosen from a workspace's "..." menu; each renders as a collapsible group whose sessions can be opened right there, and that workspace's own group is hidden from the list below while it is pinned.
+   **A Session you have already read, with no other state, shows no marker at all** — that leading cell stays empty. Only the three states above draw something.
+
+   These three groups are **mutually exclusive**, ranked `running > unread > open now` — the upstream rule, unchanged here. **A globally pinned session is still listed in its state group** — the pinned part is an extra listing, so expanding it never shortens the groups below.
+
+   **The selected Session is highlighted exactly as the shipped row highlights it.** The row the main view holds takes the sidebar's own selection fill — the same rule and the same theme token (`--dsw-alias-interactive-bg-hover`), with `aria-selected` set the same way — so the pinned copy and the original row read as one state and follow the theme together.
+3. **Globally pinned workspaces** — chosen from a workspace's "..." menu; each renders as a collapsible group whose sessions can be opened right there. That workspace's own group stays exactly where the sidebar draws it.
 
 Archived sessions and subagent child sessions never appear. Rows are ordered by most recent update, empty parts are omitted, and the whole section stays unrendered when every part is empty. Clicking a row opens that session.
 
@@ -63,9 +71,13 @@ The section renders only while sessions are grouped by workspace (the "By worksp
    A session already pinned through the Host registry does not show this row again — the shipped menu already
    carries its unpin entry, and two entries for one thing would disagree with each other.
 2. A workspace's "..." menu carries the same action. DSH declares no slot for that menu, so the row is portaled into the shipped popup, located from the open row's `data-row-key="workspace:<key>"`.
-3. A pinned session row and a pinned workspace header both carry an unpin control that appears on hover — the workspace one matters because its ordinary row is hidden while it is pinned.
+3. A pinned workspace header carries an unpin control that appears on hover. Its ordinary row is still there in place.
 
 Hovering any row in the section reveals the same **`...` more** button the shipped row has: clicking it, right-clicking the row, or pressing <kbd>Shift</kbd>+<kbd>F10</kbd> / <kbd>Menu</kbd> opens the **shipped session menu**, so rename, fork, archive and pin behave exactly as on a native row, including entries other plugins contribute to that menu.
+
+> **Nothing is drawn at rest.** Before you hover, a row's trailing edge is clean — no backdrop, no gradient, no faded button. Only the single `...` appears on hover, using the shipped row's metrics (24×24, `radius-xs`, 13px gap).
+
+> **Why one `...` and no separate archive / pin buttons?** Those two buttons on a native row come from the shipped `sidebar.workspaces.session.row.action` seat, which only the shipped row renders; a plugin cannot render that seat again without re-declaring it. So this section does not paint a second button pair — it routes through the one shipped menu, which carries the same actions with the same semantics.
 
 The section is inserted at the top of the list's own scroll container, so a long pinned section scrolls together with the workspace groups rather than clipping its own overflow.
 

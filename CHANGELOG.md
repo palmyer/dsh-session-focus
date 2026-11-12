@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.3.0-fork.10] - 2026-11-12
+
+1. **The grey dot on already-read Sessions is gone.** The base `.dshps-dot` carried `background:var(--dsw-alias-label-tertiary)`, and `dotOf` returns an empty state for a Session that is neither running, unread, nor open. The class was therefore still applied on its own, so every read Session rendered a grey marker. The base class now paints `transparent`, leaving the leading cell empty for those rows.
+2. The other two states are untouched: running keeps its pulsing dot, unread its green dot, and the open Session its hollow ring (`box-shadow: inset`), which is unchanged.
+3. Self-checks assert the base rule paints nothing, does not fall back to a grey token, and that the open Session still carries its own ring rule.
+
+## [0.3.0-fork.9] - 2026-11-12
+
+1. **The `running > unread > open now` exclusivity is restored.** `0.3.0-fork.8` had turned the three state groups into independent membership so a Session could appear in several of them. That was a behaviour change on top of the requested fix and it is reverted: the derivation is now byte-for-byte the upstream `if / else if / else if` chain again.
+2. What remains from the earlier work is only the fix that was actually asked for: a pinned Session is no longer skipped while collecting the state groups, so opening the pinned list does not shorten the other groups. That line was the only change left in the derivation, and the UI work from `0.3.0-fork.3` through `0.3.0-fork.7` is untouched.
+3. Self-checks were rewritten to assert the exclusive semantics instead: a running open Session is reported under Running only, a resumed Session under Running only, and an unread open Session under Unread only.
+
+## [0.3.0-fork.8] - 2026-11-12
+
+1. **Fixed: 「待查看」 and 「当前打开」 could vanish.** The three state groups were ranked in one `else if` chain (running > unread > open), a rule inherited from upstream. That made a group disappear whenever a more important fact applied to its only member — the common case being the Session you were looking at also running, which emptied 「当前打开」 entirely, and a Session resuming while it still had an unread completion, which emptied 「待查看」. An empty group is dropped, so the rows seemed to vanish from the section.
+2. The groups are now independent facts, matching how the shipped row presents the same Session (a running row still carries the open Session's selection fill). A Session that is running **and** on screen appears in both groups. `待查看` keeps one guard: a Session that is running again is no longer "finished unread", so the stale flag does not keep it there.
+3. The explicit pin list stays independent, as before: pinning never removes a Session from any state group, and no state group can remove a Session from the pin list.
+4. Self-checks pin the corrected semantics: a running open Session is listed under both groups, a resumed Session leaves Unread, and an unread open Session is listed under both.
+
+## [0.3.0-fork.7] - 2026-11-12
+
+1. **The stray gradient strip is gone.** The hover cluster used to paint its own `linear-gradient` backdrop while its buttons stayed at `opacity:0`, so at rest a row showed a permanent vertical fade on its right edge with nothing inside it. The backdrop is removed; nothing is painted at rest.
+2. **Hover now reveals one control instead of a parallel implementation.** The cluster held a hand-built `×` unpin button plus a `…` trigger; the `×` is gone. What remains is the shipped session menu trigger, which opens the same menu the row below opens — same items, same actions, including rename / fork / archive / pin and anything other plugins contribute. The reason is structural: the shipped `sidebar.workspaces.session.row.action` seat is rendered by the shipped row itself, and a plugin cannot render it again without re-declaring that slot, so a second archive/pin pair would have been exactly the duplicate this section is meant to avoid.
+3. Metrics now follow the shipped `.iconButton` / `.rowActions`: 24×24 buttons, `radius-xs`, 13px gap, `display:none` at rest instead of transparent, and the resting workspace label hides on hover so the two clusters never overlap.
+4. Self-checks assert that the cluster holds exactly one control, that it carries `aria-haspopup="menu"`, and that clicking it opens the shipped menu for that Session rather than acting on the row itself.
+
+## [0.3.0-fork.6] - 2026-11-12
+
+Every group in the pinned section now folds, through one mechanism.
+
+1. **Running / Unread / Open now fold like the pin list did.** Their captions were static text; the chevron existed only on the pin list. All of them now render through a shared `GroupCaption` / `CollapsibleGroup` pair, so the whole caption row is the control — not the chevron alone — with `role="button"`, `aria-expanded`, `tabIndex=0` and Enter / Space handling. The chevron is a decorative glyph that mirrors the state.
+2. **The pinned-workspaces caption folds too.** It was the last static caption. Collapsing it hides the workspace groups while the per-workspace chevrons keep working.
+3. **Fold state is per group and persisted.** A new `collapsedStatusGroups` list in the same store (`dsh.session-focus.prefs.v1`) records which captions are folded, keyed by the group's own key, so folding Running never folds Unread and the choice survives a reload. Older persisted state has no such field and reads as "everything expanded".
+4. The two fold paths that already existed (`sessionPinsCollapsed` for the pin list, `collapsedWorkspaces` for each pinned workspace) are unchanged, so a saved layout keeps working.
+5. Self-checks now assert the shared contract on every group, that each group hides its own rows when folded, and that folding one group leaves its siblings expanded.
+
+## [0.3.0-fork.5] - 2026-11-12
+
+1. A Session row in the pinned section now shows the **shipped selection highlight** when it is the Session the main view holds. The row was previously indistinguishable from its neighbours apart from the hollow status dot. The treatment is copied verbatim from the sidebar's own rule, read from the shipped bundle: `.wnFoaW_sessionRow.wnFoaW_selected{background-color:var(--dsw-alias-interactive-bg-hover)}` — same token, same `aria-selected` attribute — so the pinned copy of an open Session looks selected for the same reason the original row does, and follows the theme with it.
+2. `deriveSections` now tags the retained row with `selected`, alongside the existing `dot`. No new state and no second notion of "current": it is the same `retainedBy.mainView > 0` predicate the sidebar uses.
+3. Self-checks cover the flag and the rendered row (`dshps-selected` + `aria-selected="true"`), and assert an ordinary row stays unselected.
+
+## [0.3.0-fork.4] - 2026-11-12
+
+1. The **Global pins** caption is now clickable across its whole row, not just on the 16px chevron. The row carries `role="button"`, `aria-expanded`, a full-width hover fill and Enter / Space handling, so folding the list no longer requires hitting a small glyph. The chevron is now a decorative `aria-hidden` marker that mirrors the state; `dshps-groupToggle` is gone.
+2. Row height, indent and the caption text are unchanged — only the hit area and its hover feedback changed.
+
+## [0.3.0-fork.3] - 2026-11-12
+
+The pinned section overrode the rest of the sidebar. Opening it took rows away from other groups, and pinning a workspace made its own group vanish. Both are gone: the section is now purely additive.
+
+1. The explicit pin list no longer removes its Sessions from the **Running / Unread / Open now** groups. Expanding the pin list previously emptied those groups row by row, so the layout below the section changed depending on a fold state. A pinned Session is now listed twice — once at the top, once in its own group — and expanding or collapsing changes this part only. `sessionPinsCollapsed` stays as a fold control for the pin list itself.
+2. Pinning a workspace no longer hides that workspace's group or its member Session rows in the list below. The `useGroupHiding` stylesheet writer is now a no-op that only clears rules an older build may have left behind, so upgrading cannot keep rows hidden.
+3. Defaults unchanged: the pin list still starts expanded; only the fold behaviour it used to drive is gone.
+4. Self-checks updated to assert the additive contract instead of the old exclusion: pinned sessions keep their status group, all three groups render, and folding changes nothing outside the pin list.
+
 ## [0.3.0-fork.2] - 2026-11-11
 
 1. The explicit pin list (**Global pins**) now renders LAST in the section: live state groups (running / unread / open now) come first, then pinned workspaces, then the pin list. A long pin list no longer pushes the live groups out of sight.

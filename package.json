@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-focus",
-  "version": "0.3.0-fork.2",
+  "version": "0.3.0-fork.10",
   "description": "Puts pinned, running, finished-but-unopened and currently open sessions in one section at the top of the DSH Web sidebar. Fork of dsh-pinned-sessions that also merges the native registry pin set.",
   "license": "MIT",
   "type": "module",
