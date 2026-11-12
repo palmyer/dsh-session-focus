@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.0-fork.11] - 2026-11-12
+
+1. Both READMEs rewritten as standalone documentation: the upstream comparison table, the fork notice and the "differences from the original" section are gone. They now describe what the plugin does — the section's contents, the three exclusive state groups and their markers, folding, selection, the shipped-menu hover control, theming and the visibility rules — for a reader who has never seen another version.
+2. A screenshot of the section (`docs/pinned-section.png`) is embedded in both READMEs, and `docs` was added to the package `files` list so the image survives an npm publish.
+
 ## [0.3.0-fork.10] - 2026-11-12
 
 1. **The grey dot on already-read Sessions is gone.** The base `.dshps-dot` carried `background:var(--dsw-alias-label-tertiary)`, and `dotOf` returns an empty state for a Session that is neither running, unread, nor open. The class was therefore still applied on its own, so every read Session rendered a grey marker. The base class now paints `transparent`, leaving the leading cell empty for those rows.
